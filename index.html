@@ -1,0 +1,1427 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Ermos de Varyn v0.5</title>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #07110c;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: Arial, sans-serif;
+}
+
+canvas {
+  display: block;
+  background: #07110c;
+}
+
+#info {
+  position: fixed;
+  left: 14px;
+  top: 14px;
+  color: white;
+  font-size: 13px;
+  background: rgba(0,0,0,0.42);
+  padding: 8px 10px;
+  border-radius: 9px;
+  pointer-events: none;
+  line-height: 1.35;
+  z-index: 2;
+}
+
+#joystickBase {
+  position: fixed;
+  left: 28px;
+  bottom: 40px;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.10);
+  border: 2px solid rgba(255,255,255,0.22);
+  touch-action: none;
+  z-index: 3;
+}
+
+#joystickStick {
+  position: absolute;
+  left: 41px;
+  top: 41px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.36);
+  box-shadow: 0 0 12px rgba(255,255,255,0.12);
+}
+
+.gameButton {
+  position: fixed;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.25);
+  color: white;
+  font-weight: bold;
+  touch-action: none;
+  z-index: 3;
+}
+
+#actionButton {
+  right: 28px;
+  bottom: 58px;
+  width: 96px;
+  height: 96px;
+  background: rgba(190,60,45,0.68);
+  font-size: 17px;
+}
+
+#toolButton {
+  right: 140px;
+  bottom: 76px;
+  width: 70px;
+  height: 70px;
+  background: rgba(50,100,180,0.68);
+  font-size: 11px;
+}
+
+#craftButton {
+  right: 28px;
+  bottom: 170px;
+  width: 72px;
+  height: 72px;
+  background: rgba(166,124,48,0.78);
+  font-size: 12px;
+}
+
+#eatButton {
+  right: 114px;
+  bottom: 174px;
+  width: 68px;
+  height: 68px;
+  background: rgba(60,160,80,0.76);
+  font-size: 12px;
+}
+
+#craftPanel {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(360px, 88vw);
+  background: rgba(14, 20, 16, 0.97);
+  border: 2px solid rgba(255,255,255,0.22);
+  border-radius: 15px;
+  padding: 14px;
+  color: white;
+  display: none;
+  z-index: 10;
+  box-shadow: 0 10px 35px rgba(0,0,0,0.5);
+}
+
+#craftPanel h2 {
+  margin: 0 0 8px;
+  font-size: 21px;
+}
+
+.recipe {
+  background: rgba(255,255,255,0.08);
+  padding: 10px;
+  border-radius: 10px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.recipeTitle {
+  font-weight: bold;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.recipe button, #closeCraft {
+  margin-top: 8px;
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 0;
+  font-weight: bold;
+}
+
+.recipe button {
+  background: #d6a84f;
+  color: #1a1205;
+}
+
+.recipe button:disabled {
+  background: #555;
+  color: #aaa;
+}
+
+#closeCraft {
+  background: #333;
+  color: white;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="info">
+  Ermos de Varyn — v0.5<br>
+  Pegue recursos, crie ferramentas e sobreviva.
+</div>
+
+<div id="joystickBase">
+  <div id="joystickStick"></div>
+</div>
+
+<button id="actionButton" class="gameButton">AÇÃO</button>
+<button id="toolButton" class="gameButton">MÃO</button>
+<button id="craftButton" class="gameButton">CRIAR</button>
+<button id="eatButton" class="gameButton">COMER</button>
+
+<div id="craftPanel">
+  <h2>Criar</h2>
+  <div id="resourcesText"></div>
+
+  <div class="recipe">
+    <div class="recipeTitle">Machado primitivo</div>
+    <div>Custo: 3 madeira + 2 pedra</div>
+    <div>Excelente contra árvores. Péssimo contra rochas.</div>
+    <button id="craftAxe">Criar Machado</button>
+  </div>
+
+  <div class="recipe">
+    <div class="recipeTitle">Picareta primitiva</div>
+    <div>Custo: 2 madeira + 4 pedra</div>
+    <div>Excelente contra rochas. Ruim contra árvores.</div>
+    <button id="craftPickaxe">Criar Picareta</button>
+  </div>
+
+  <div class="recipe">
+    <div class="recipeTitle">Lança simples</div>
+    <div>Custo: 3 madeira + 1 pedra</div>
+    <div>Boa contra animais. Quase inútil para coleta pesada.</div>
+    <button id="craftSpear">Criar Lança</button>
+  </div>
+
+  <button id="closeCraft">Fechar</button>
+</div>
+
+<script>
+try {
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener("resize", resizeCanvas);
+
+const TILE = 64;
+const MAP_W = 78;
+const MAP_H = 78;
+
+const world = [];
+const objects = [];
+const groundItems = [];
+const animals = [];
+const particles = [];
+
+const player = {
+  x: 8 * TILE,
+  y: 8 * TILE,
+  radius: 15,
+  baseSpeed: 2.55,
+
+  hp: 100,
+  maxHp: 100,
+  hunger: 100,
+  maxHunger: 100,
+
+  wood: 0,
+  stone: 0,
+  berries: 0,
+  meat: 0,
+
+  tools: {
+    hand: true,
+    axe: false,
+    pickaxe: false,
+    spear: false
+  },
+
+  equippedTool: "hand",
+  dead: false,
+  hurtTimer: 0,
+  walkTime: 0
+};
+
+const camera = {
+  x: 0,
+  y: 0,
+  shake: 0
+};
+
+let joyX = 0;
+let joyY = 0;
+let joystickPointerId = null;
+let actionPressed = false;
+
+let message = "Você acordou numa floresta. Procure galhos, pedrinhas e bagas.";
+let messageTimer = 320;
+
+const toolData = {
+  hand: {
+    name: "MÃO",
+    tree: 0,
+    rock: 0,
+    enemy: 2
+  },
+  axe: {
+    name: "MACHADO",
+    tree: 20,
+    rock: 1,
+    enemy: 6
+  },
+  pickaxe: {
+    name: "PICARETA",
+    tree: 3,
+    rock: 20,
+    enemy: 5
+  },
+  spear: {
+    name: "LANÇA",
+    tree: 1,
+    rock: 1,
+    enemy: 18
+  }
+};
+
+function setMessage(text) {
+  message = text;
+  messageTimer = 260;
+}
+
+function dist(a, b) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function normalize(dx, dy) {
+  const d = Math.sqrt(dx * dx + dy * dy);
+  if (d === 0) return { x: 0, y: 0 };
+  return { x: dx / d, y: dy / d };
+}
+
+function rand(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+function makeGroundItem(type, x, y) {
+  return {
+    type,
+    x,
+    y,
+    radius: type === "branch" ? 14 : 12,
+    collected: false,
+    bob: Math.random() * 100
+  };
+}
+
+function addParticles(x, y, color, amount) {
+  for (let i = 0; i < amount; i++) {
+    particles.push({
+      x,
+      y,
+      vx: rand(-1.8, 1.8),
+      vy: rand(-2.2, 0.8),
+      life: rand(22, 38),
+      maxLife: 38,
+      size: rand(2, 5),
+      color
+    });
+  }
+}
+
+function screenShake(amount) {
+  camera.shake = Math.max(camera.shake, amount);
+}
+
+function generateWorld() {
+  for (let y = 0; y < MAP_H; y++) {
+    const row = [];
+
+    for (let x = 0; x < MAP_W; x++) {
+      row.push({
+        grassVariant: Math.floor(Math.random() * 5),
+        detail: Math.random()
+      });
+
+      const nearSpawn = x < 13 && y < 13;
+      const r = Math.random();
+
+      if (!nearSpawn && r < 0.105) {
+        objects.push({
+          type: "tree",
+          x: x * TILE + TILE / 2,
+          y: y * TILE + TILE / 2,
+          radius: 25,
+          hp: 60,
+          maxHp: 60,
+          flash: 0
+        });
+      } else if (!nearSpawn && r < 0.148) {
+        objects.push({
+          type: "rock",
+          x: x * TILE + TILE / 2,
+          y: y * TILE + TILE / 2,
+          radius: 22,
+          hp: 50,
+          maxHp: 50,
+          flash: 0
+        });
+      } else if (!nearSpawn && r < 0.184) {
+        objects.push({
+          type: "berryBush",
+          x: x * TILE + TILE / 2,
+          y: y * TILE + TILE / 2,
+          radius: 20,
+          hp: 1,
+          maxHp: 1,
+          flash: 0
+        });
+      }
+
+      const itemRoll = Math.random();
+
+      if (!nearSpawn && itemRoll < 0.030) {
+        groundItems.push(makeGroundItem("branch", x * TILE + rand(18, 46), y * TILE + rand(18, 46)));
+      } else if (!nearSpawn && itemRoll < 0.055) {
+        groundItems.push(makeGroundItem("pebble", x * TILE + rand(18, 46), y * TILE + rand(18, 46)));
+      } else if (!nearSpawn && itemRoll < 0.070) {
+        groundItems.push(makeGroundItem("berries", x * TILE + rand(18, 46), y * TILE + rand(18, 46)));
+      }
+    }
+
+    world.push(row);
+  }
+
+  spawnStarterItems();
+  spawnAnimals();
+}
+
+function spawnStarterItems() {
+  for (let i = 0; i < 9; i++) {
+    groundItems.push(makeGroundItem("branch", (8.8 + Math.random() * 5.2) * TILE, (8.3 + Math.random() * 5.2) * TILE));
+  }
+
+  for (let i = 0; i < 9; i++) {
+    groundItems.push(makeGroundItem("pebble", (8.6 + Math.random() * 5.8) * TILE, (8.6 + Math.random() * 5.3) * TILE));
+  }
+
+  for (let i = 0; i < 6; i++) {
+    groundItems.push(makeGroundItem("berries", (9.5 + Math.random() * 5.2) * TILE, (9.4 + Math.random() * 5.3) * TILE));
+  }
+}
+
+function spawnAnimals() {
+  for (let i = 0; i < 12; i++) {
+    animals.push({
+      type: "rabbit",
+      x: (15 + Math.random() * 45) * TILE,
+      y: (15 + Math.random() * 45) * TILE,
+      radius: 12,
+      hp: 18,
+      maxHp: 18,
+      speed: 1.7,
+      state: "wander",
+      dirX: rand(-1, 1),
+      dirY: rand(-1, 1),
+      timer: 60 + Math.random() * 120,
+      alive: true,
+      flash: 0
+    });
+  }
+}
+
+generateWorld();
+
+// =====================
+// JOYSTICK COM POINTER EVENTS
+// =====================
+const joystickBase = document.getElementById("joystickBase");
+const joystickStick = document.getElementById("joystickStick");
+
+joystickBase.addEventListener("pointerdown", function(e) {
+  e.preventDefault();
+  joystickPointerId = e.pointerId;
+  joystickBase.setPointerCapture(e.pointerId);
+  updateJoystick(e);
+});
+
+joystickBase.addEventListener("pointermove", function(e) {
+  if (e.pointerId !== joystickPointerId) return;
+  e.preventDefault();
+  updateJoystick(e);
+});
+
+joystickBase.addEventListener("pointerup", function(e) {
+  if (e.pointerId !== joystickPointerId) return;
+  resetJoystick();
+});
+
+joystickBase.addEventListener("pointercancel", resetJoystick);
+
+function updateJoystick(e) {
+  const rect = joystickBase.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
+
+  let dx = e.clientX - centerX;
+  let dy = e.clientY - centerY;
+
+  const maxDistance = 43;
+  const d = Math.sqrt(dx * dx + dy * dy);
+
+  if (d > maxDistance) {
+    dx = dx / d * maxDistance;
+    dy = dy / d * maxDistance;
+  }
+
+  joyX = dx / maxDistance;
+  joyY = dy / maxDistance;
+
+  joystickStick.style.left = (41 + dx) + "px";
+  joystickStick.style.top = (41 + dy) + "px";
+}
+
+function resetJoystick() {
+  joystickPointerId = null;
+  joyX = 0;
+  joyY = 0;
+  joystickStick.style.left = "41px";
+  joystickStick.style.top = "41px";
+}
+
+// =====================
+// BOTÕES
+// =====================
+const actionButton = document.getElementById("actionButton");
+const toolButton = document.getElementById("toolButton");
+const craftButton = document.getElementById("craftButton");
+const eatButton = document.getElementById("eatButton");
+const craftPanel = document.getElementById("craftPanel");
+
+function bindButton(btn, fn) {
+  btn.addEventListener("pointerdown", function(e) {
+    e.preventDefault();
+    fn();
+  });
+}
+
+bindButton(actionButton, function() {
+  actionPressed = true;
+});
+
+bindButton(toolButton, cycleTool);
+bindButton(craftButton, openCraftPanel);
+bindButton(eatButton, eatFood);
+
+bindButton(document.getElementById("closeCraft"), function() {
+  craftPanel.style.display = "none";
+});
+
+bindButton(document.getElementById("craftAxe"), function() {
+  craftTool("axe");
+});
+
+bindButton(document.getElementById("craftPickaxe"), function() {
+  craftTool("pickaxe");
+});
+
+bindButton(document.getElementById("craftSpear"), function() {
+  craftTool("spear");
+});
+
+window.addEventListener("keydown", function(e) {
+  if (e.code === "Space") actionPressed = true;
+  if (e.key === "q") cycleTool();
+  if (e.key === "c") openCraftPanel();
+  if (e.key === "e") eatFood();
+});
+
+// =====================
+// CRAFT
+// =====================
+function openCraftPanel() {
+  craftPanel.style.display = "block";
+  updateCraftPanel();
+}
+
+function updateCraftPanel() {
+  document.getElementById("resourcesText").innerText =
+    "Recursos: " + player.wood + " madeira | " + player.stone + " pedra | bagas: " + player.berries + " | carne: " + player.meat;
+
+  const axeButton = document.getElementById("craftAxe");
+  const pickaxeButton = document.getElementById("craftPickaxe");
+  const spearButton = document.getElementById("craftSpear");
+
+  axeButton.disabled = player.tools.axe || player.wood < 3 || player.stone < 2;
+  pickaxeButton.disabled = player.tools.pickaxe || player.wood < 2 || player.stone < 4;
+  spearButton.disabled = player.tools.spear || player.wood < 3 || player.stone < 1;
+
+  axeButton.innerText = player.tools.axe ? "Machado já criado" : "Criar Machado";
+  pickaxeButton.innerText = player.tools.pickaxe ? "Picareta já criada" : "Criar Picareta";
+  spearButton.innerText = player.tools.spear ? "Lança já criada" : "Criar Lança";
+}
+
+function craftTool(tool) {
+  if (tool === "axe" && !player.tools.axe && player.wood >= 3 && player.stone >= 2) {
+    player.wood -= 3;
+    player.stone -= 2;
+    player.tools.axe = true;
+    player.equippedTool = "axe";
+    setMessage("Você criou um machado primitivo.");
+    addParticles(player.x, player.y, "#d6a84f", 18);
+  }
+
+  if (tool === "pickaxe" && !player.tools.pickaxe && player.wood >= 2 && player.stone >= 4) {
+    player.wood -= 2;
+    player.stone -= 4;
+    player.tools.pickaxe = true;
+    player.equippedTool = "pickaxe";
+    setMessage("Você criou uma picareta primitiva.");
+    addParticles(player.x, player.y, "#bfc7c7", 18);
+  }
+
+  if (tool === "spear" && !player.tools.spear && player.wood >= 3 && player.stone >= 1) {
+    player.wood -= 3;
+    player.stone -= 1;
+    player.tools.spear = true;
+    player.equippedTool = "spear";
+    setMessage("Você criou uma lança simples.");
+    addParticles(player.x, player.y, "#d6a84f", 18);
+  }
+
+  updateToolButton();
+  updateCraftPanel();
+}
+
+function cycleTool() {
+  const owned = ["hand"];
+  if (player.tools.axe) owned.push("axe");
+  if (player.tools.pickaxe) owned.push("pickaxe");
+  if (player.tools.spear) owned.push("spear");
+
+  let index = owned.indexOf(player.equippedTool);
+  index++;
+  if (index >= owned.length) index = 0;
+
+  player.equippedTool = owned[index];
+  updateToolButton();
+  setMessage("Equipado: " + toolData[player.equippedTool].name);
+}
+
+function updateToolButton() {
+  toolButton.innerText = toolData[player.equippedTool].name;
+}
+
+// =====================
+// COMIDA
+// =====================
+function eatFood() {
+  if (player.dead) return;
+
+  if (player.berries > 0) {
+    player.berries--;
+    player.hunger = Math.min(player.maxHunger, player.hunger + 16);
+    player.hp = Math.min(player.maxHp, player.hp + 3);
+    setMessage("Você comeu bagas. +16 fome, +3 vida.");
+    addParticles(player.x, player.y - 10, "#b53058", 10);
+    return;
+  }
+
+  if (player.meat > 0) {
+    player.meat--;
+    player.hunger = Math.min(player.maxHunger, player.hunger + 30);
+    player.hp = Math.min(player.maxHp, player.hp + 5);
+    setMessage("Você comeu carne crua. +30 fome, +5 vida.");
+    addParticles(player.x, player.y - 10, "#9b3b2f", 10);
+    return;
+  }
+
+  setMessage("Você não tem comida.");
+}
+
+// =====================
+// COLISÃO
+// =====================
+function canMoveTo(nx, ny) {
+  const future = { x: nx, y: ny, radius: player.radius };
+
+  for (let i = 0; i < objects.length; i++) {
+    const obj = objects[i];
+    if (obj.hp <= 0) continue;
+
+    const d = dist(future, obj);
+    if (d < player.radius + obj.radius * 0.70) return false;
+  }
+
+  return true;
+}
+
+function isBlockedForAnimal(nx, ny, radius) {
+  const future = { x: nx, y: ny, radius };
+
+  for (let i = 0; i < objects.length; i++) {
+    const obj = objects[i];
+    if (obj.hp <= 0) continue;
+
+    const d = dist(future, obj);
+    if (d < radius + obj.radius * 0.62) return true;
+  }
+
+  return false;
+}
+
+// =====================
+// AÇÃO
+// =====================
+function performAction() {
+  if (player.dead) return;
+
+  let nearestAnimal = null;
+  let nearestAnimalDist = Infinity;
+
+  for (let i = 0; i < animals.length; i++) {
+    const animal = animals[i];
+    if (!animal.alive) continue;
+
+    const d = dist(player, animal);
+    if (d < 74 && d < nearestAnimalDist) {
+      nearestAnimal = animal;
+      nearestAnimalDist = d;
+    }
+  }
+
+  if (nearestAnimal) {
+    attackAnimal(nearestAnimal);
+    return;
+  }
+
+  for (let i = 0; i < groundItems.length; i++) {
+    const item = groundItems[i];
+    if (item.collected) continue;
+
+    if (dist(player, item) < 55) {
+      item.collected = true;
+
+      if (item.type === "branch") {
+        player.wood++;
+        setMessage("Você coletou um galho. +1 madeira.");
+        addParticles(item.x, item.y, "#8b5a2b", 10);
+      }
+
+      if (item.type === "pebble") {
+        player.stone++;
+        setMessage("Você coletou uma pedrinha. +1 pedra.");
+        addParticles(item.x, item.y, "#aeb7b7", 10);
+      }
+
+      if (item.type === "berries") {
+        player.berries++;
+        setMessage("Você coletou bagas. +1 comida.");
+        addParticles(item.x, item.y, "#b53058", 10);
+      }
+
+      return;
+    }
+  }
+
+  let nearestObj = null;
+  let nearestObjDist = Infinity;
+
+  for (let i = 0; i < objects.length; i++) {
+    const obj = objects[i];
+    if (obj.hp <= 0) continue;
+
+    const d = dist(player, obj);
+    if (d < 86 && d < nearestObjDist) {
+      nearestObj = obj;
+      nearestObjDist = d;
+    }
+  }
+
+  if (!nearestObj) {
+    setMessage("Nada por perto para interagir.");
+    return;
+  }
+
+  if (nearestObj.type === "berryBush") {
+    nearestObj.hp = 0;
+    player.berries += 2;
+    setMessage("Você colheu um arbusto de bagas. +2 comida.");
+    addParticles(nearestObj.x, nearestObj.y, "#b53058", 18);
+    screenShake(2);
+    return;
+  }
+
+  const tool = player.equippedTool;
+  const damage = toolData[tool][nearestObj.type] || 0;
+
+  if (damage <= 0) {
+    if (nearestObj.type === "tree") {
+      setMessage("Com a mão você não derruba árvore. Procure galhos e crie um machado.");
+    } else {
+      setMessage("Com a mão você não quebra rocha. Procure pedrinhas e crie uma picareta.");
+    }
+    return;
+  }
+
+  nearestObj.hp -= damage;
+  nearestObj.flash = 8;
+
+  if (nearestObj.type === "tree") {
+    addParticles(nearestObj.x, nearestObj.y, "#8b5a2b", 8);
+    setMessage(toolData[tool].name + " causou " + damage + " na árvore.");
+  }
+
+  if (nearestObj.type === "rock") {
+    addParticles(nearestObj.x, nearestObj.y, "#bfc7c7", 8);
+    setMessage(toolData[tool].name + " causou " + damage + " na rocha.");
+  }
+
+  screenShake(3);
+
+  if (nearestObj.hp <= 0) {
+    if (nearestObj.type === "tree") {
+      player.wood += 5;
+      spawnDrops(nearestObj.x, nearestObj.y, "branch", 3);
+      addParticles(nearestObj.x, nearestObj.y, "#8b5a2b", 26);
+      setMessage("Você derrubou uma árvore. +5 madeira.");
+    }
+
+    if (nearestObj.type === "rock") {
+      player.stone += 5;
+      spawnDrops(nearestObj.x, nearestObj.y, "pebble", 3);
+      addParticles(nearestObj.x, nearestObj.y, "#bfc7c7", 26);
+      setMessage("Você quebrou uma rocha. +5 pedra.");
+    }
+
+    screenShake(7);
+  }
+}
+
+function attackAnimal(animal) {
+  const damage = toolData[player.equippedTool].enemy || 1;
+  animal.hp -= damage;
+  animal.flash = 10;
+  animal.state = "flee";
+
+  setMessage("Você acertou um coelho. Dano: " + damage + ".");
+  addParticles(animal.x, animal.y, "#d8d8d8", 10);
+  screenShake(3);
+
+  if (animal.hp <= 0) {
+    animal.alive = false;
+    player.meat += 1;
+    addParticles(animal.x, animal.y, "#8b2f2f", 18);
+    setMessage("Você abateu um coelho. +1 carne.");
+  }
+}
+
+function spawnDrops(x, y, type, amount) {
+  for (let i = 0; i < amount; i++) {
+    groundItems.push(makeGroundItem(type, x + rand(-32, 32), y + rand(-32, 32)));
+  }
+}
+
+// =====================
+// UPDATE
+// =====================
+function update() {
+  if (!player.dead) {
+    updatePlayer();
+    updateSurvival();
+    updateAnimals();
+  }
+
+  updateParticles();
+
+  for (let i = 0; i < objects.length; i++) {
+    if (objects[i].flash > 0) objects[i].flash--;
+  }
+
+  for (let i = 0; i < animals.length; i++) {
+    if (animals[i].flash > 0) animals[i].flash--;
+  }
+
+  if (messageTimer > 0) messageTimer--;
+  if (camera.shake > 0) camera.shake *= 0.86;
+
+  camera.x += (player.x - canvas.width / 2 - camera.x) * 0.10;
+  camera.y += (player.y - canvas.height / 2 - camera.y) * 0.10;
+}
+
+function updatePlayer() {
+  const length = Math.sqrt(joyX * joyX + joyY * joyY);
+
+  let moveX = joyX;
+  let moveY = joyY;
+
+  if (length > 1) {
+    moveX /= length;
+    moveY /= length;
+  }
+
+  let speed = player.baseSpeed;
+
+  if (player.hunger <= 25) speed *= 0.82;
+  if (player.hunger <= 8) speed *= 0.65;
+
+  const nextX = player.x + moveX * speed;
+  const nextY = player.y + moveY * speed;
+
+  if (canMoveTo(nextX, player.y)) player.x = nextX;
+  if (canMoveTo(player.x, nextY)) player.y = nextY;
+
+  player.x = Math.max(20, Math.min(player.x, MAP_W * TILE - 20));
+  player.y = Math.max(20, Math.min(player.y, MAP_H * TILE - 20));
+
+  if (Math.abs(moveX) + Math.abs(moveY) > 0.05) {
+    player.walkTime += 0.18;
+  }
+
+  if (actionPressed) {
+    performAction();
+    actionPressed = false;
+  }
+
+  if (player.hurtTimer > 0) player.hurtTimer--;
+}
+
+function updateSurvival() {
+  player.hunger -= 0.0045;
+
+  if (player.hunger < 0) {
+    player.hunger = 0;
+    player.hp -= 0.025;
+  }
+
+  if (player.hp <= 0) {
+    player.hp = 0;
+    player.dead = true;
+    setMessage("Você morreu nos Ermos de Varyn.");
+  }
+}
+
+function updateAnimals() {
+  for (let i = 0; i < animals.length; i++) {
+    const animal = animals[i];
+    if (!animal.alive) continue;
+
+    const dToPlayer = dist(animal, player);
+
+    if (animal.type === "rabbit") {
+      if (dToPlayer < 145) animal.state = "flee";
+      else if (animal.state === "flee" && dToPlayer > 230) animal.state = "wander";
+    }
+
+    if (animal.state === "wander") {
+      animal.timer--;
+
+      if (animal.timer <= 0) {
+        animal.dirX = rand(-1, 1);
+        animal.dirY = rand(-1, 1);
+        animal.timer = 70 + Math.random() * 120;
+      }
+
+      moveAnimal(animal, animal.dirX, animal.dirY, animal.speed * 0.33);
+    }
+
+    if (animal.state === "flee") {
+      const dir = normalize(animal.x - player.x, animal.y - player.y);
+      moveAnimal(animal, dir.x, dir.y, animal.speed * 1.55);
+    }
+  }
+}
+
+function moveAnimal(animal, dx, dy, speed) {
+  const n = normalize(dx, dy);
+  const nx = animal.x + n.x * speed;
+  const ny = animal.y + n.y * speed;
+
+  if (!isBlockedForAnimal(nx, animal.y, animal.radius)) animal.x = nx;
+  else animal.dirX *= -1;
+
+  if (!isBlockedForAnimal(animal.x, ny, animal.radius)) animal.y = ny;
+  else animal.dirY *= -1;
+
+  animal.x = Math.max(20, Math.min(animal.x, MAP_W * TILE - 20));
+  animal.y = Math.max(20, Math.min(animal.y, MAP_H * TILE - 20));
+}
+
+function updateParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.06;
+    p.life--;
+
+    if (p.life <= 0) {
+      particles.splice(i, 1);
+    }
+  }
+}
+
+// =====================
+// DRAW
+// =====================
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const shakeX = camera.shake > 0 ? rand(-camera.shake, camera.shake) : 0;
+  const shakeY = camera.shake > 0 ? rand(-camera.shake, camera.shake) : 0;
+
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
+
+  drawGround();
+  drawGroundItems();
+  drawObjects();
+  drawAnimals();
+  drawPlayer();
+  drawParticles();
+
+  ctx.restore();
+
+  drawHUD();
+  drawMessage();
+
+  if (player.dead) drawDeathScreen();
+}
+
+function worldToScreenX(x) {
+  return x - camera.x;
+}
+
+function worldToScreenY(y) {
+  return y - camera.y;
+}
+
+function drawGround() {
+  const startX = Math.floor(camera.x / TILE) - 1;
+  const startY = Math.floor(camera.y / TILE) - 1;
+  const endX = startX + Math.ceil(canvas.width / TILE) + 3;
+  const endY = startY + Math.ceil(canvas.height / TILE) + 3;
+
+  for (let y = startY; y < endY; y++) {
+    for (let x = startX; x < endX; x++) {
+      if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) continue;
+
+      const sx = x * TILE - camera.x;
+      const sy = y * TILE - camera.y;
+      const tile = world[y][x];
+
+      if (tile.grassVariant === 0) ctx.fillStyle = "#2e6d39";
+      if (tile.grassVariant === 1) ctx.fillStyle = "#327a42";
+      if (tile.grassVariant === 2) ctx.fillStyle = "#285f34";
+      if (tile.grassVariant === 3) ctx.fillStyle = "#377f43";
+      if (tile.grassVariant === 4) ctx.fillStyle = "#2b6a3a";
+
+      ctx.fillRect(sx, sy, TILE, TILE);
+
+      if (tile.detail > 0.55) {
+        ctx.fillStyle = "rgba(255,255,255,0.04)";
+        ctx.fillRect(sx + 10, sy + 15, 9, 2);
+        ctx.fillRect(sx + 38, sy + 43, 12, 2);
+      }
+
+      if (tile.detail < 0.18) {
+        ctx.fillStyle = "rgba(0,0,0,0.04)";
+        ctx.fillRect(sx + 23, sy + 50, 10, 2);
+      }
+    }
+  }
+}
+
+function drawGroundItems() {
+  for (let i = 0; i < groundItems.length; i++) {
+    const item = groundItems[i];
+    if (item.collected) continue;
+
+    const sx = worldToScreenX(item.x);
+    const sy = worldToScreenY(item.y) + Math.sin((Date.now() / 250) + item.bob) * 1.8;
+
+    if (sx < -60 || sy < -60 || sx > canvas.width + 60 || sy > canvas.height + 60) continue;
+
+    if (item.type === "branch") {
+      ctx.strokeStyle = "#8b5a2b";
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(sx - 13, sy + 6);
+      ctx.lineTo(sx + 13, sy - 6);
+      ctx.stroke();
+
+      ctx.strokeStyle = "#6d401d";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(sx + 1, sy);
+      ctx.lineTo(sx + 11, sy + 8);
+      ctx.stroke();
+    }
+
+    if (item.type === "pebble") {
+      ctx.fillStyle = "#8d9696";
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, 9, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#c0c7c7";
+      ctx.beginPath();
+      ctx.ellipse(sx - 2, sy - 2, 4, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (item.type === "berries") {
+      ctx.fillStyle = "#2f7532";
+      ctx.beginPath();
+      ctx.arc(sx, sy, 10, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#b53058";
+      ctx.beginPath();
+      ctx.arc(sx - 3, sy - 2, 3, 0, Math.PI * 2);
+      ctx.arc(sx + 4, sy + 1, 3, 0, Math.PI * 2);
+      ctx.arc(sx + 1, sy + 5, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function drawObjects() {
+  const visible = objects
+    .filter(function(o) { return o.hp > 0; })
+    .sort(function(a, b) { return a.y - b.y; });
+
+  for (let i = 0; i < visible.length; i++) {
+    const obj = visible[i];
+    const sx = worldToScreenX(obj.x);
+    const sy = worldToScreenY(obj.y);
+
+    if (sx < -110 || sy < -110 || sx > canvas.width + 110 || sy > canvas.height + 110) continue;
+
+    if (obj.type === "tree") drawTree(sx, sy, obj);
+    if (obj.type === "rock") drawRock(sx, sy, obj);
+    if (obj.type === "berryBush") drawBerryBush(sx, sy, obj);
+  }
+}
+
+function drawTree(sx, sy, obj) {
+  ctx.fillStyle = "rgba(0,0,0,0.26)";
+  ctx.beginPath();
+  ctx.ellipse(sx, sy + 23, 25, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#5a351e";
+  ctx.fillRect(sx - 5, sy + 3, 10, 30);
+
+  ctx.fillStyle = obj.flash > 0 ? "#9ad18b" : "#174d2b";
+  ctx.beginPath();
+  ctx.arc(sx, sy - 10, 29, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = obj.flash > 0 ? "#b8e6a8" : "#216b39";
+  ctx.beginPath();
+  ctx.arc(sx - 14, sy - 17, 19, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(sx + 14, sy - 18, 19, 0, Math.PI * 2);
+  ctx.fill();
+
+  drawHealthBar(sx, sy - 54, obj.hp, obj.maxHp);
+}
+
+function drawRock(sx, sy, obj) {
+  ctx.fillStyle = "rgba(0,0,0,0.24)";
+  ctx.beginPath();
+  ctx.ellipse(sx, sy + 20, 23, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = obj.flash > 0 ? "#d4dddd" : "#5f6666";
+  ctx.beginPath();
+  ctx.ellipse(sx, sy + 8, 24, 17, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = obj.flash > 0 ? "#ffffff" : "#858c8c";
+  ctx.beginPath();
+  ctx.ellipse(sx - 6, sy + 2, 12, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  drawHealthBar(sx, sy - 24, obj.hp, obj.maxHp);
+}
+
+function drawBerryBush(sx, sy, obj) {
+  ctx.fillStyle = "rgba(0,0,0,0.20)";
+  ctx.beginPath();
+  ctx.ellipse(sx, sy + 14, 18, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = obj.flash > 0 ? "#62a65b" : "#1d5b2f";
+  ctx.beginPath();
+  ctx.arc(sx, sy, 20, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#b53058";
+  for (let i = 0; i < 7; i++) {
+    ctx.beginPath();
+    ctx.arc(sx - 11 + i * 4, sy - 6 + (i % 2) * 8, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawAnimals() {
+  const visible = animals
+    .filter(function(a) { return a.alive; })
+    .sort(function(a, b) { return a.y - b.y; });
+
+  for (let i = 0; i < visible.length; i++) {
+    const animal = visible[i];
+    const sx = worldToScreenX(animal.x);
+    const sy = worldToScreenY(animal.y);
+
+    if (sx < -80 || sy < -80 || sx > canvas.width + 80 || sy > canvas.height + 80) continue;
+
+    drawRabbit(sx, sy, animal);
+  }
+}
+
+function drawRabbit(sx, sy, animal) {
+  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  ctx.beginPath();
+  ctx.ellipse(sx, sy + 13, 14, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = animal.flash > 0 ? "#ffffff" : "#d8d3c8";
+  ctx.beginPath();
+  ctx.ellipse(sx, sy, 14, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(sx + 11, sy - 4, 7, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = animal.flash > 0 ? "#ffffff" : "#d8d3c8";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(sx + 9, sy - 10);
+  ctx.lineTo(sx + 6, sy - 24);
+  ctx.moveTo(sx + 14, sy - 10);
+  ctx.lineTo(sx + 18, sy - 24);
+  ctx.stroke();
+
+  drawHealthBar(sx, sy - 30, animal.hp, animal.maxHp);
+}
+
+function drawPlayer() {
+  const sx = worldToScreenX(player.x);
+  const sy = worldToScreenY(player.y);
+
+  const walking = Math.abs(joyX) + Math.abs(joyY) > 0.05;
+  const bob = walking ? Math.sin(player.walkTime) * 2.2 : 0;
+
+  ctx.fillStyle = "rgba(0,0,0,0.30)";
+  ctx.beginPath();
+  ctx.ellipse(sx, sy + 18, 17, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = player.hurtTimer > 0 ? "#c44" : "#2d5f9f";
+  ctx.fillRect(sx - 9, sy - 4 + bob, 18, 24);
+
+  ctx.fillStyle = "#f1c27d";
+  ctx.beginPath();
+  ctx.arc(sx, sy - 14 + bob, 10, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#3b2418";
+  ctx.fillRect(sx - 8, sy - 24 + bob, 16, 8);
+
+  ctx.fillStyle = "#1d3557";
+  ctx.fillRect(sx - 8, sy + 18 + bob, 6, 12);
+  ctx.fillRect(sx + 2, sy + 18 - bob, 6, 12);
+
+  drawEquippedTool(sx, sy + bob);
+}
+
+function drawEquippedTool(sx, sy) {
+  if (player.equippedTool === "axe") {
+    ctx.strokeStyle = "#8b5a2b";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(sx + 12, sy - 2);
+    ctx.lineTo(sx + 27, sy - 18);
+    ctx.stroke();
+
+    ctx.fillStyle = "#c7c7c7";
+    ctx.fillRect(sx + 23, sy - 24, 12, 8);
+  }
+
+  if (player.equippedTool === "pickaxe") {
+    ctx.strokeStyle = "#8b5a2b";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(sx + 12, sy - 2);
+    ctx.lineTo(sx + 28, sy - 18);
+    ctx.stroke();
+
+    ctx.strokeStyle = "#c7c7c7";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(sx + 18, sy - 23);
+    ctx.lineTo(sx + 38, sy - 17);
+    ctx.stroke();
+  }
+
+  if (player.equippedTool === "spear") {
+    ctx.strokeStyle = "#9b6a33";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(sx + 10, sy + 4);
+    ctx.lineTo(sx + 39, sy - 27);
+    ctx.stroke();
+
+    ctx.fillStyle = "#cfcfcf";
+    ctx.beginPath();
+    ctx.moveTo(sx + 39, sy - 27);
+    ctx.lineTo(sx + 48, sy - 35);
+    ctx.lineTo(sx + 43, sy - 22);
+    ctx.fill();
+  }
+}
+
+function drawParticles() {
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+    const sx = worldToScreenX(p.x);
+    const sy = worldToScreenY(p.y);
+    const alpha = Math.max(0, p.life / p.maxLife);
+
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(sx, sy, p.size, p.size);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawHUD() {
+  ctx.fillStyle = "rgba(0,0,0,0.50)";
+  ctx.fillRect(14, 82, 236, 154);
+
+  ctx.fillStyle = "white";
+  ctx.font = "15px Arial";
+  ctx.fillText("Vida: " + Math.floor(player.hp) + "/" + player.maxHp, 26, 108);
+  ctx.fillText("Fome: " + Math.floor(player.hunger) + "/" + player.maxHunger, 26, 130);
+  ctx.fillText("Madeira: " + player.wood, 26, 156);
+  ctx.fillText("Pedra: " + player.stone, 26, 178);
+  ctx.fillText("Bagas: " + player.berries + " | Carne: " + player.meat, 26, 200);
+  ctx.fillText("Equipado: " + toolData[player.equippedTool].name, 26, 222);
+
+  drawStatusBars();
+}
+
+function drawStatusBars() {
+  const x = 92;
+  const hpY = 98;
+  const hungerY = 120;
+  const w = 130;
+  const h = 8;
+
+  ctx.fillStyle = "#222";
+  ctx.fillRect(x, hpY, w, h);
+  ctx.fillStyle = "#c43b3b";
+  ctx.fillRect(x, hpY, w * (player.hp / player.maxHp), h);
+
+  ctx.fillStyle = "#222";
+  ctx.fillRect(x, hungerY, w, h);
+  ctx.fillStyle = "#d69b3a";
+  ctx.fillRect(x, hungerY, w * (player.hunger / player.maxHunger), h);
+}
+
+function drawMessage() {
+  if (messageTimer <= 0) return;
+
+  const boxW = Math.min(canvas.width - 32, 470);
+  const boxH = 50;
+  const x = (canvas.width - boxW) / 2;
+  const y = 22;
+
+  ctx.fillStyle = "rgba(0,0,0,0.64)";
+  ctx.fillRect(x, y, boxW, boxH);
+
+  ctx.fillStyle = "white";
+  ctx.font = "14px Arial";
+  ctx.fillText(message, x + 14, y + 31);
+}
+
+function drawHealthBar(x, y, hp, maxHp) {
+  if (hp >= maxHp) return;
+
+  const w = 36;
+  const h = 5;
+  const pct = Math.max(0, hp / maxHp);
+
+  ctx.fillStyle = "rgba(0,0,0,0.58)";
+  ctx.fillRect(x - w / 2, y, w, h);
+
+  ctx.fillStyle = "#d64545";
+  ctx.fillRect(x - w / 2, y, w * pct, h);
+}
+
+function drawDeathScreen() {
+  ctx.fillStyle = "rgba(0,0,0,0.75)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "white";
+  ctx.font = "28px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("Você morreu", canvas.width / 2, canvas.height / 2 - 20);
+
+  ctx.font = "16px Arial";
+  ctx.fillText("Atualize a página para recomeçar.", canvas.width / 2, canvas.height / 2 + 18);
+  ctx.textAlign = "left";
+}
+
+// =====================
+// LOOP
+// =====================
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+updateToolButton();
+gameLoop();
+
+} catch (error) {
+  document.body.innerHTML =
+    "<div style='color:white;background:#111;padding:20px;font-family:Arial'>" +
+    "<h2>Erro no jogo</h2>" +
+    "<p>" + error.message + "</p>" +
+    "</div>";
+}
+</script>
+
+</body>
+</html>
